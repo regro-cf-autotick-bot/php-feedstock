@@ -1,49 +1,31 @@
 Patch PHP's Windows build to work with conda-forge library names.
 
-conda-forge provides different .lib filenames than what the PHP SDK expects.
-Also removes GNU libiconv-specific symbols for compatibility.
+conda-forge provides different .lib filenames than what the PHP SDK expects,
+so the CHECK_LIB search lists below are widened accordingly.
 
-diff --git a/ext/iconv/config.w32 b/ext/iconv/config.w32
---- a/ext/iconv/config.w32
-+++ b/ext/iconv/config.w32
-@@ -9,9 +9,7 @@ if (PHP_ICONV != "no") {
+php_iconv.def additionally drops the GNU libiconv symbols. conda-forge's
+iconv.lib has no _libiconv_version, and because that is a *data* symbol it
+cannot be re-exported from php8ts.dll the way the four libiconv* functions
+can, so leaving it in the .def fails the link with:
 
- 		EXTENSION("iconv", "iconv.c", PHP_ICONV_SHARED, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+    php8ts.dll.def : error LNK2001: unresolved external symbol _libiconv_version
 
- 		AC_DEFINE("HAVE_ICONV", 1, "Define to 1 if the PHP extension 'iconv' is available.");
--		AC_DEFINE("HAVE_LIBICONV", 1, "Define to 1 if you have the 'libiconv' function.");
--		AC_DEFINE("ICONV_ALIASED_LIBICONV", 1, "Define to 1 if 'iconv()' is aliased to 'libiconv()'.");
--		AC_DEFINE("PHP_ICONV_IMPL", "\"libiconv\"", "The iconv implementation.");
-+		AC_DEFINE("PHP_ICONV_IMPL", "\"libc\"", "The iconv implementation.");
- 		ADD_FLAG("CFLAGS_ICONV", "/D PHP_ICONV_EXPORTS ");
- 		if (!PHP_ICONV_SHARED) {
- 			ADD_DEF_FILE("ext\\iconv\\php_iconv.def");
-diff --git a/ext/iconv/php_iconv.def b/ext/iconv/php_iconv.def
---- a/ext/iconv/php_iconv.def
-+++ b/ext/iconv/php_iconv.def
-@@ -1,6 +1 @@
- EXPORTS
--_libiconv_version
--libiconv_close
--libiconv
--libiconv_open
--libiconv_set_relocation_prefix
-diff --git a/ext/gmp/config.w32 b/ext/gmp/config.w32
---- a/ext/gmp/config.w32
-+++ b/ext/gmp/config.w32
-@@ -3,7 +3,7 @@
- ARG_WITH("gmp", "Include GNU MP support.", "no");
+The replacement comment line in that hunk is load-bearing, not decoration:
+rattler-build >= 0.70 (flickzeug) silently drops a hunk that consists only of
+context and deletion lines when it has leading but no trailing context, which
+is exactly the shape of a pure "delete the last 5 lines" hunk. Keeping one
+inserted line in the hunk sidesteps that bug. Once it is fixed upstream the
+comment can go away.
 
- if (PHP_GMP != "no") {
--	if (CHECK_LIB("mpir_a.lib", "gmp", PHP_GMP) &&
-+	if (CHECK_LIB("mpir_a.lib;gmp.lib", "gmp", PHP_GMP) &&
- 		CHECK_HEADER_ADD_INCLUDE("gmp.h", "CFLAGS_GMP", PHP_GMP +  ";" + PHP_PHP_BUILD + "\\include\\mpir")) {
- 		EXTENSION("gmp", "gmp.c", null, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
- 		PHP_INSTALL_HEADERS("ext/gmp", "php_gmp_int.h");
+This patch is machine-generated (git diff); regenerate it rather than editing
+hunk headers by hand.
+
 diff --git a/ext/curl/config.w32 b/ext/curl/config.w32
+index 4f8e3448..370c1587 100644
 --- a/ext/curl/config.w32
 +++ b/ext/curl/config.w32
-@@ -5,12 +5,8 @@ if (PHP_CURL != "no") {
+@@ -4,15 +4,11 @@ ARG_WITH("curl", "cURL support", "no");
+ 
  if (PHP_CURL != "no") {
  	var curl_location;
 -	if ((curl_location = CHECK_LIB("libcurl_a.lib;libcurl.lib", "curl", PHP_CURL)) &&
@@ -58,10 +40,53 @@ diff --git a/ext/curl/config.w32 b/ext/curl/config.w32
 -		 CHECK_LIB("nghttp2.lib", "curl", PHP_CURL))
 +		CHECK_LIB("wldap32.lib", "curl", PHP_CURL)
  		) {
+ 		if (!(CHECK_HEADER_ADD_INCLUDE("brotli/decode.h", "CFLAGS_CURL") &&
+ 			CHECK_LIB("brotlidec.lib;brotlidec-static.lib", "curl", PHP_CURL) &&
+diff --git a/ext/gmp/config.w32 b/ext/gmp/config.w32
+index 2bb4aa63..afec8431 100644
+--- a/ext/gmp/config.w32
++++ b/ext/gmp/config.w32
+@@ -3,7 +3,7 @@
+ ARG_WITH("gmp", "Include GNU MP support.", "no");
+ 
+ if (PHP_GMP != "no") {
+-	if (CHECK_LIB("mpir_a.lib", "gmp", PHP_GMP) &&
++	if (CHECK_LIB("mpir_a.lib;gmp.lib", "gmp", PHP_GMP) &&
+ 		CHECK_HEADER_ADD_INCLUDE("gmp.h", "CFLAGS_GMP", PHP_GMP +  ";" + PHP_PHP_BUILD + "\\include\\mpir")) {
+ 		EXTENSION("gmp", "gmp.c", null, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+ 		PHP_INSTALL_HEADERS("ext/gmp", "php_gmp_int.h");
+diff --git a/ext/iconv/config.w32 b/ext/iconv/config.w32
+index d99c53fb..930fdf9a 100644
+--- a/ext/iconv/config.w32
++++ b/ext/iconv/config.w32
+@@ -10,9 +10,7 @@ if (PHP_ICONV != "no") {
+ 		EXTENSION("iconv", "iconv.c", PHP_ICONV_SHARED, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+ 
+ 		AC_DEFINE("HAVE_ICONV", 1, "Define to 1 if the PHP extension 'iconv' is available.");
+-		AC_DEFINE("HAVE_LIBICONV", 1, "Define to 1 if you have the 'libiconv' function.");
+-		AC_DEFINE("ICONV_ALIASED_LIBICONV", 1, "Define to 1 if 'iconv()' is aliased to 'libiconv()'.");
+-		AC_DEFINE("PHP_ICONV_IMPL", "\"libiconv\"", "The iconv implementation.");
++		AC_DEFINE("PHP_ICONV_IMPL", "\"libc\"", "The iconv implementation.");
+ 		ADD_FLAG("CFLAGS_ICONV", "/D PHP_ICONV_EXPORTS ");
+ 		if (!PHP_ICONV_SHARED) {
+ 			ADD_DEF_FILE("ext\\iconv\\php_iconv.def");
+diff --git a/ext/iconv/php_iconv.def b/ext/iconv/php_iconv.def
+index 2f77aa4c..02ec975f 100644
+--- a/ext/iconv/php_iconv.def
++++ b/ext/iconv/php_iconv.def
+@@ -1,6 +1,2 @@
+ EXPORTS
+-_libiconv_version
+-libiconv_close
+-libiconv
+-libiconv_open
+-libiconv_set_relocation_prefix
++; conda-forge: libiconv symbols are intentionally not re-exported here.
 diff --git a/ext/zip/config.w32 b/ext/zip/config.w32
+index c0226f89..65dee640 100644
 --- a/ext/zip/config.w32
 +++ b/ext/zip/config.w32
-@@ -5,8 +5,8 @@
+@@ -5,8 +5,8 @@ ARG_ENABLE("zip", "ZIP support", "yes,shared");
  if (PHP_ZIP != "no") {
  	if (CHECK_HEADER_ADD_INCLUDE("zip.h", "CFLAGS_ZIP", PHP_PHP_BUILD + "\\include;" + PHP_EXTRA_INCLUDES) &&
  		CHECK_HEADER_ADD_INCLUDE("zipconf.h", "CFLAGS_ZIP", PHP_PHP_BUILD + "\\lib\\libzip\\include;" + PHP_EXTRA_LIBS + "\\libzip\\include;" + PHP_ZIP) &&
@@ -73,13 +98,15 @@ diff --git a/ext/zip/config.w32 b/ext/zip/config.w32
  		EXTENSION('zip', 'php_zip.c zip_stream.c');
  		ADD_EXTENSION_DEP('zip', 'pcre');
 diff --git a/win32/build/confutils.js b/win32/build/confutils.js
+index cea1368b..2dd655b6 100644
 --- a/win32/build/confutils.js
 +++ b/win32/build/confutils.js
-@@ -3676,6 +3676,6 @@
+@@ -3675,7 +3675,7 @@ function SETUP_OPENSSL(target, path_to_check, common_name, use_env, add_dir_part
+ 
  function SETUP_SQLITE3(target, path_to_check, shared) {
  	var cflags_var = "CFLAGS_" + target.toUpperCase();
 -	var libs = (shared ? "libsqlite3.lib;libsqlite3_a.lib" : "libsqlite3_a.lib;libsqlite3.lib");
 +	var libs = (shared ? "libsqlite3.lib;libsqlite3_a.lib;sqlite3.lib" : "libsqlite3_a.lib;libsqlite3.lib;sqlite3.lib");
-
+ 
  	return CHECK_LIB(libs, target, path_to_check) &&
  		CHECK_HEADER_ADD_INCLUDE("sqlite3.h", cflags_var) &&
